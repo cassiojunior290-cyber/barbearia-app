@@ -75,6 +75,7 @@ CREATE TABLE usuarios (
 )
 """)
 
+
 # Tabela agemdamentos
 # Tabela agendamentos
 c.execute("DROP TABLE IF EXISTS agendamentos")
