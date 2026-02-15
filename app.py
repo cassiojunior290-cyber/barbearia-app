@@ -4,7 +4,57 @@ import hashlib
 from datetime import datetime
 
 st.set_page_config(page_title="BarberPro", page_icon="💈")
+# ==============================
+# 🎨 ESTILO PREMIUM
+# ==============================
 
+st.markdown("""
+<style>
+
+body {
+    background-color: #0E1117;
+}
+
+.stApp {
+    background: linear-gradient(145deg, #0E1117, #111827);
+    color: white;
+}
+
+h1, h2, h3 {
+    color: #D4AF37;
+    font-weight: 700;
+}
+
+.stButton>button {
+    background: linear-gradient(90deg, #D4AF37, #C9A227);
+    color: black;
+    font-weight: bold;
+    border-radius: 10px;
+    padding: 10px;
+    border: none;
+}
+
+.stButton>button:hover {
+    background: linear-gradient(90deg, #E6C55A, #D4AF37);
+    transform: scale(1.02);
+}
+
+.stSuccess {
+    background-color: #0F5132 !important;
+}
+
+.stWarning {
+    background-color: #664D03 !important;
+}
+
+.stTextInput>div>div>input {
+    background-color: #1F2937;
+    color: white;
+    border-radius: 8px;
+}
+
+</style>
+""", unsafe_allow_html=True)
 # ==============================
 # 🔹 BANCO DE DADOS
 # ==============================
