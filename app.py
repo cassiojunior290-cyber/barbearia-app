@@ -73,8 +73,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
 """)
 
 # Tabela agendamentos
+# Tabela agendamentos
+c.execute("DROP TABLE IF EXISTS agendamentos")
+
 c.execute("""
-CREATE TABLE IF NOT EXISTS agendamentos (
+CREATE TABLE agendamentos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     usuario TEXT NOT NULL,
     servico TEXT NOT NULL,
@@ -266,7 +269,7 @@ else:
 
     st.divider()
 
-    if st.button("Sair"):
+    if st.button("Sair", key="botao_sair"):
         st.session_state.logado = False
         st.session_state.usuario = ""
         st.rerun()
