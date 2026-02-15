@@ -62,12 +62,8 @@ h1, h2, h3 {
 conn = sqlite3.connect("barberpro.db", check_same_thread=False)
 c = conn.cursor()
 
-# Apagar tabela antiga
-c.execute("DROP TABLE IF EXISTS usuarios")
-
-# Criar tabela nova correta
 c.execute("""
-CREATE TABLE usuarios (
+CREATE TABLE IF NOT EXISTS usuarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
     senha TEXT NOT NULL,
