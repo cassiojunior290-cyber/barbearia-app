@@ -163,69 +163,113 @@ if not st.session_state.logado:
                 st.error("Login inválido")
 
 # ==============================
-# 🔓 ÁREA LOGADA
+# 🔓 ÁREA LOGADA PREMIUM
 # ==============================
 
 else:
-    st.title("💈 Painel BarberPro")
-    st.success(f"Bem-vindo, {st.session_state.usuario}")
+    st.markdown("## 💈 Painel BarberPro")
+    st.markdown(f"### 👤 {st.session_state.usuario}")
 
-    menu = st.radio("Menu", ["Agendar Horário", "Meus Agendamentos", "Área Premium"])
+    menu = st.radio("", ["📅 Agendar", "📋 Meus Agendamentos", "👑 Premium"], horizontal=True)
 
     # ==========================
-    # 📅 AGENDAMENTO
+    # 📅 AGENDAR
     # ==========================
+    if menu == "📅 Agendar":
 
-    if menu == "Agendar Horário":
-        st.subheader("Novo Agendamento")
+        st.markdown("### ✂️ Novo Agendamento")
 
-        servico = st.selectbox("Serviço", ["Corte", "Barba", "Corte + Barba"])
-        data = st.date_input("Data")
-        hora = st.time_input("Hora")
+        servico = st.selectbox("Escolha o serviço",
+                               ["Corte", "Barba", "Corte + Barba"])
+
+        col1, col2 = st.columns(2)
+        with col1:
+            data = st.date_input("Data")
+        with col2:
+            hora = st.time_input("Hora")
 
         if st.button("Confirmar Agendamento"):
             data_final = f"{data} {hora}"
             salvar_agendamento(st.session_state.usuario, servico, data_final)
-            st.success("Agendamento realizado com sucesso!")
+            st.success("Agendamento confirmado com sucesso! ✨")
 
     # ==========================
-    # 📋 LISTAR AGENDAMENTOS
+    # 📋 MEUS AGENDAMENTOS
     # ==========================
+    elif menu == "📋 Meus Agendamentos":
 
-    if menu == "Meus Agendamentos":
-        st.subheader("Seus horários marcados")
+        st.markdown("### 📋 Seus Horários")
 
         agendamentos = listar_agendamentos(st.session_state.usuario)
 
         if agendamentos:
             for ag in agendamentos:
-                st.write(f"✂️ {ag[0]} - 📅 {ag[1]}")
+                st.markdown(f"""
+                <div style="
+                    background: #1F2937;
+                    padding:15px;
+                    border-radius:12px;
+                    margin-bottom:10px;
+                    border-left: 4px solid #D4AF37;">
+                    
+                    <b>Serviço:</b> {ag[0]} <br>
+                    <b>Data:</b> {ag[1]}
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            st.info("Nenhum agendamento encontrado.")
+            st.info("Você ainda não possui agendamentos.")
 
     # ==========================
-    # 👑 ÁREA PREMIUM
+    # 👑 PREMIUM
     # ==========================
+    elif menu == "👑 Premium":
 
-    if menu == "Área Premium":
+        st.markdown("### 👑 Área Exclusiva")
 
-        if verificar_premium(st.session_state.usuario) == 1:
-            st.subheader("👑 Área Exclusiva Premium")
-            st.success("Você é membro premium!")
+        resultado = c.execute(
+            "SELECT premium FROM usuarios WHERE email = ?",
+            (st.session_state.usuario,)
+        ).fetchone()
 
-            st.write("Benefícios:")
-            st.write("✔️ Prioridade no agendamento")
-            st.write("✔️ Desconto especial")
-            st.write("✔️ Horários exclusivos")
+        if resultado and resultado[0] == 1:
+
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #D4AF37, #C9A227);
+                padding:20px;
+                border-radius:15px;
+                color:black;
+                font-weight:bold;">
+                
+                ✅ Você é membro PREMIUM<br><br>
+                ✔ Prioridade nos horários<br>
+                ✔ Atendimento VIP<br>
+                ✔ Descontos exclusivos
+            </div>
+            """, unsafe_allow_html=True)
 
         else:
             st.warning("Você ainda não é Premium.")
 
-            if st.button("Virar Premium"):
-                virar_premium(st.session_state.usuario)
-                st.success("Agora você é Premium!")
+            if st.button("🚀 Tornar-se Premium"):
+                c.execute(
+                    "UPDATE usuarios SET premium = 1 WHERE email = ?",
+                    (st.session_state.usuario,)
+                )
+                conn.commit()
+                st.success("Agora você é Premium! 👑")
                 st.rerun()
 
+    # ==========================
+    # 🚪 SAIR
+    # ==========================
+
+    st.divider()
+
+    if st.button("Sair"):
+        st.session_state.logado = False
+        st.session_state.usuario = ""
+        st.rerun()
     # ==========================
     # 🚪 SAIR
     # ==========================
