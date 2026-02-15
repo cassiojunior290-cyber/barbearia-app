@@ -1,61 +1,58 @@
 import streamlit as st
 import sqlite3
 from datetime import datetime, timedelta, time
+import hashlib
 
-# CONFIG
-BARBERS = ["Igor", "Marcos", "Silva"]
-SERVICES = ["Corte R$30", "Barba R$25", "Combo R$50"]
-ADMIN_PASSWORD = "admin123"
+st.set_page_config(page_title="BarberPro", layout="centered")
 
-st.set_page_config(page_title="Barbearia", layout="centered")
+# =============================
+# BANCO DE DADOS
+# =============================
 
-# ===== BANCO DE DADOS =====
-def create_db():
-    conn = sqlite3.connect("barbearia.db")
+def conectar():
+    return sqlite3.connect("barberpro.db", check_same_thread=False)
+
+def criar_tabelas():
+    conn = conectar()
     c = conn.cursor()
+
     c.execute("""
-        CREATE TABLE IF NOT EXISTS agendamentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT,
-            barbeiro TEXT,
-            servico TEXT,
-            data TEXT,
-            hora TEXT
-        )
+    CREATE TABLE IF NOT EXISTS barbearias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT,
+        slug TEXT UNIQUE,
+        email TEXT UNIQUE,
+        senha TEXT,
+        plano TEXT,
+        data_criacao TEXT
+    )
     """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS agendamentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barbearia_id INTEGER,
+        cliente TEXT,
+        barbeiro TEXT,
+        servico TEXT,
+        data TEXT,
+        hora TEXT
+    )
+    """)
+
     conn.commit()
     conn.close()
 
-def salvar_agendamento(nome, barbeiro, servico, data, hora):
-    conn = sqlite3.connect("barbearia.db")
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO agendamentos (nome, barbeiro, servico, data, hora)
-        VALUES (?, ?, ?, ?, ?)
-    """, (nome, barbeiro, servico, data, hora))
-    conn.commit()
-    conn.close()
+# =============================
+# UTILIDADES
+# =============================
 
-def horarios_ocupados(barbeiro, data):
-    conn = sqlite3.connect("barbearia.db")
-    c = conn.cursor()
-    c.execute("""
-        SELECT hora FROM agendamentos
-        WHERE barbeiro = ? AND data = ?
-    """, (barbeiro, data))
-    dados = c.fetchall()
-    conn.close()
-    return [d[0] for d in dados]
+def hash_senha(senha):
+    return hashlib.sha256(senha.encode()).hexdigest()
 
-def listar_agendamentos():
-    conn = sqlite3.connect("barbearia.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM agendamentos")
-    dados = c.fetchall()
-    conn.close()
-    return dados
+def gerar_slug(nome):
+    return nome.lower().replace(" ", "")
 
-# ===== HORÁRIOS =====
 def gerar_horarios():
     horarios = []
     inicio = datetime.combine(datetime.today(), time(9,0))
@@ -66,73 +63,134 @@ def gerar_horarios():
         atual += timedelta(hours=1)
     return horarios
 
-# ===== LOGIN =====
+# =============================
+# CADASTRO
+# =============================
+
+def tela_cadastro():
+    st.title("💈 BarberPro")
+    st.subheader("Criar Conta")
+
+    nome = st.text_input("Nome da Barbearia")
+    email = st.text_input("Email")
+    senha = st.text_input("Senha", type="password")
+    plano = st.selectbox("Plano", ["Básico - R$49", "Pro - R$79", "Premium - R$129"])
+
+    if st.button("Criar Conta"):
+        slug = gerar_slug(nome)
+        conn = conectar()
+        c = conn.cursor()
+
+        try:
+            c.execute("""
+            INSERT INTO barbearias (nome, slug, email, senha, plano, data_criacao)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (nome, slug, email, hash_senha(senha), plano, str(datetime.now())))
+
+            conn.commit()
+            st.success("Conta criada com sucesso!")
+            st.info(f"Seu link exclusivo será: ?empresa={slug}")
+
+        except:
+            st.error("Email ou nome já cadastrados.")
+
+        conn.close()
+
+# =============================
+# LOGIN
+# =============================
+
 def tela_login():
-    st.title("💈 Sistema Barbearia")
+    st.title("💈 BarberPro")
+    st.subheader("Login")
 
-    tipo = st.radio("Entrar como:", ["Cliente", "Admin"])
+    email = st.text_input("Email")
+    senha = st.text_input("Senha", type="password")
 
-    if tipo == "Cliente":
-        if st.button("Entrar"):
-            st.session_state["tipo"] = "cliente"
+    if st.button("Entrar"):
+        conn = conectar()
+        c = conn.cursor()
 
-    if tipo == "Admin":
-        senha = st.text_input("Senha", type="password")
-        if st.button("Entrar Admin"):
-            if senha == ADMIN_PASSWORD:
-                st.session_state["tipo"] = "admin"
-            else:
-                st.error("Senha incorreta")
+        c.execute("SELECT * FROM barbearias WHERE email=? AND senha=?",
+                  (email, hash_senha(senha)))
+        usuario = c.fetchone()
+        conn.close()
 
-# ===== CLIENTE =====
-def tela_cliente():
-    st.header("Agendar Horário")
+        if usuario:
+            st.session_state["barbearia_id"] = usuario[0]
+            st.session_state["barbearia_nome"] = usuario[1]
+        else:
+            st.error("Credenciais inválidas.")
 
-    nome = st.text_input("Seu nome")
-    barbeiro = st.selectbox("Barbeiro", BARBERS)
-    servico = st.selectbox("Serviço", SERVICES)
+# =============================
+# DASHBOARD BARBEARIA
+# =============================
+
+def dashboard():
+    st.title(f"💈 {st.session_state['barbearia_nome']}")
+    st.subheader("Organize. Automatize. Lucre.")
+
+    BARBEIROS = ["Barbeiro 1", "Barbeiro 2"]
+    SERVICOS = ["Corte", "Barba", "Combo"]
+
+    nome_cliente = st.text_input("Nome do Cliente")
+    barbeiro = st.selectbox("Barbeiro", BARBEIROS)
+    servico = st.selectbox("Serviço", SERVICOS)
     data = st.date_input("Data")
 
     todos = gerar_horarios()
-    ocupados = horarios_ocupados(barbeiro, str(data))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute("""
+        SELECT hora FROM agendamentos
+        WHERE barbearia_id=? AND data=? AND barbeiro=?
+    """, (st.session_state["barbearia_id"], str(data), barbeiro))
+
+    ocupados = [x[0] for x in c.fetchall()]
     disponiveis = [h for h in todos if h not in ocupados]
 
     hora = st.selectbox("Horário", disponiveis)
 
-    if st.button("Confirmar"):
-        if nome == "":
-            st.warning("Digite seu nome")
-        else:
-            salvar_agendamento(nome, barbeiro, servico, str(data), hora)
-            st.success("Agendamento confirmado!")
+    if st.button("Confirmar Agendamento"):
+        c.execute("""
+            INSERT INTO agendamentos
+            (barbearia_id, cliente, barbeiro, servico, data, hora)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (st.session_state["barbearia_id"],
+              nome_cliente, barbeiro, servico, str(data), hora))
+
+        conn.commit()
+        st.success("Agendamento realizado!")
+
+    st.subheader("Agendamentos")
+
+    c.execute("""
+        SELECT cliente, barbeiro, servico, data, hora
+        FROM agendamentos
+        WHERE barbearia_id=?
+    """, (st.session_state["barbearia_id"],))
+
+    dados = c.fetchall()
+    for d in dados:
+        st.write(f"{d[0]} | {d[1]} | {d[2]} | {d[3]} | {d[4]}")
+
+    conn.close()
 
     if st.button("Sair"):
-        st.session_state["tipo"] = None
+        st.session_state.clear()
 
-# ===== ADMIN =====
-def tela_admin():
-    st.header("Painel Admin")
+# =============================
+# MAIN
+# =============================
 
-    dados = listar_agendamentos()
+criar_tabelas()
 
-    if dados:
-        for d in dados:
-            st.write(f"ID:{d[0]} | {d[1]} | {d[2]} | {d[3]} | {d[4]} | {d[5]}")
+if "barbearia_id" not in st.session_state:
+    opcao = st.sidebar.selectbox("Menu", ["Login", "Criar Conta"])
+    if opcao == "Login":
+        tela_login()
     else:
-        st.info("Nenhum agendamento")
-
-    if st.button("Sair"):
-        st.session_state["tipo"] = None
-
-# ===== MAIN =====
-create_db()
-
-if "tipo" not in st.session_state:
-    st.session_state["tipo"] = None
-
-if st.session_state["tipo"] is None:
-    tela_login()
-elif st.session_state["tipo"] == "cliente":
-    tela_cliente()
-elif st.session_state["tipo"] == "admin":
-    tela_admin()
+        tela_cadastro()
+else:
+    dashboard()
