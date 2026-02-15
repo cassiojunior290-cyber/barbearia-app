@@ -3,7 +3,13 @@ import sqlite3
 import hashlib
 
 # ==============================
-# 🔹 CONEXÃO COM BANCO DE DADOS
+# 🔹 CONFIG
+# ==============================
+
+st.set_page_config(page_title="BarberPro", page_icon="💈")
+
+# ==============================
+# 🔹 BANCO
 # ==============================
 
 conn = sqlite3.connect("barberpro.db", check_same_thread=False)
@@ -16,7 +22,6 @@ CREATE TABLE IF NOT EXISTS usuarios (
     senha TEXT NOT NULL
 )
 """)
-
 conn.commit()
 
 # ==============================
@@ -41,37 +46,59 @@ def verificar_login(email, senha):
     return c.fetchone()
 
 # ==============================
-# 🎨 INTERFACE
+# 🔹 CONTROLE DE SESSÃO
 # ==============================
 
-st.set_page_config(page_title="BarberPro", page_icon="💈")
+if "logado" not in st.session_state:
+    st.session_state.logado = False
 
-st.title("💈 BarberPro")
-st.subheader("Sistema de Login")
-
-email = st.text_input("Email")
-senha = st.text_input("Senha", type="password")
-
-col1, col2 = st.columns(2)
+if "usuario" not in st.session_state:
+    st.session_state.usuario = ""
 
 # ==============================
-# 🔘 BOTÕES
+# 🔐 TELA DE LOGIN
 # ==============================
 
-with col1:
-    if st.button("Cadastrar"):
-        if email and senha:
-            if cadastrar_usuario(email, senha):
-                st.success("Usuário cadastrado com sucesso!")
+if not st.session_state.logado:
+
+    st.title("💈 BarberPro")
+    st.subheader("Sistema de Login")
+
+    email = st.text_input("Email")
+    senha = st.text_input("Senha", type="password")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Cadastrar"):
+            if email and senha:
+                if cadastrar_usuario(email, senha):
+                    st.success("Usuário cadastrado com sucesso!")
+                else:
+                    st.error("Email já cadastrado!")
             else:
-                st.error("Email já cadastrado!")
-        else:
-            st.warning("Preencha todos os campos!")
+                st.warning("Preencha todos os campos!")
 
-with col2:
-    if st.button("Entrar"):
-        if verificar_login(email, senha):
-            st.success("Login realizado com sucesso!")
-            st.write("Bem-vindo ao BarberPro ✂️")
-        else:
-            st.error("Credenciais inválidas.")
+    with col2:
+        if st.button("Entrar"):
+            if verificar_login(email, senha):
+                st.session_state.logado = True
+                st.session_state.usuario = email
+                st.rerun()
+            else:
+                st.error("Credenciais inválidas.")
+
+# ==============================
+# 🔓 ÁREA LOGADA
+# ==============================
+
+else:
+    st.title("💈 BarberPro - Painel")
+    st.success(f"Bem-vindo, {st.session_state.usuario} ✂️")
+
+    st.write("Aqui será o painel do sistema.")
+
+    if st.button("Sair"):
+        st.session_state.logado = False
+        st.session_state.usuario = ""
+        st.rerun()
