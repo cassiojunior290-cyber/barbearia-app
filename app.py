@@ -270,11 +270,4 @@ else:
         st.session_state.logado = False
         st.session_state.usuario = ""
         st.rerun()
-    # ==========================
-    # 🚪 SAIR
-    # ==========================
-
-    if st.button("Sair"):
-        st.session_state.logado = False
-        st.session_state.usuario = ""
-        st.rerun()
+ 
