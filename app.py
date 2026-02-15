@@ -4,6 +4,26 @@ from datetime import datetime, timedelta, time
 import hashlib
 
 st.set_page_config(page_title="BarberPro", layout="centered")
+st.markdown("""
+<style>
+body {
+    background-color: #0E1117;
+}
+h1, h2, h3 {
+    color: white;
+}
+.stButton>button {
+    background-color: #C6A75E;
+    color: black;
+    border-radius: 8px;
+    height: 45px;
+    font-weight: bold;
+}
+.stTextInput>div>div>input {
+    border-radius: 8px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =============================
 # BANCO DE DADOS
@@ -15,7 +35,22 @@ def conectar():
 def criar_tabelas():
     conn = conectar()
     c = conn.cursor()
+c.execute("""
+CREATE TABLE IF NOT EXISTS barbeiros (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    barbearia_id INTEGER,
+    nome TEXT
+)
+""")
 
+c.execute("""
+CREATE TABLE IF NOT EXISTS servicos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    barbearia_id INTEGER,
+    nome TEXT,
+    preco TEXT
+)
+""")
     c.execute("""
     CREATE TABLE IF NOT EXISTS barbearias (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,9 +165,21 @@ def dashboard():
     st.title(f"💈 {st.session_state['barbearia_nome']}")
     st.subheader("Organize. Automatize. Lucre.")
 
-    BARBEIROS = ["Barbeiro 1", "Barbeiro 2"]
-    SERVICOS = ["Corte", "Barba", "Combo"]
+    
+st.subheader("⚙ Configurações")
 
+novo_barbeiro = st.text_input("Adicionar Barbeiro")
+if st.button("Salvar Barbeiro"):
+    c.execute("INSERT INTO barbeiros (barbearia_id, nome) VALUES (?, ?)",
+              (st.session_state["barbearia_id"], novo_barbeiro))
+    conn.commit()
+
+novo_servico = st.text_input("Adicionar Serviço")
+preco_servico = st.text_input("Preço")
+if st.button("Salvar Serviço"):
+    c.execute("INSERT INTO servicos (barbearia_id, nome, preco) VALUES (?, ?, ?)",
+              (st.session_state["barbearia_id"], novo_servico, preco_servico))
+    conn.commit()
     nome_cliente = st.text_input("Nome do Cliente")
     barbeiro = st.selectbox("Barbeiro", BARBEIROS)
     servico = st.selectbox("Serviço", SERVICOS)
