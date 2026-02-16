@@ -1,66 +1,109 @@
 import streamlit as st
+from supabase import create_client
 import hashlib
 import pandas as pd
 
+# =============================
+# CONFIG SUPABASE (SEUS DADOS)
+# =============================
+
+SUPABASE_URL = "https://coqkmfuyikooalskaasc.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvcWttZnV5aWtvb2Fsc2thYXNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExOTUyMDEsImV4cCI6MjA4Njc3MTIwMX0.zquHCWkkjUXHdNQ2Ac2X3HLKmFirNWKO4yqENdDTjMY"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 st.set_page_config(page_title="BarberSaaS", page_icon="💈", layout="wide")
 
-# ==============================
-# BANCO EM MEMÓRIA (Cloud Safe)
-# ==============================
-
-if "barbearias" not in st.session_state:
-    st.session_state.barbearias = []
-
-if "usuarios" not in st.session_state:
-    st.session_state.usuarios = []
-
-if "servicos" not in st.session_state:
-    st.session_state.servicos = []
-
-if "colaboradores" not in st.session_state:
-    st.session_state.colaboradores = []
-
-if "agendamentos" not in st.session_state:
-    st.session_state.agendamentos = []
-
-if "logado" not in st.session_state:
-    st.session_state.logado = False
-
-
-# ==============================
-# FUNÇÕES
-# ==============================
+# =============================
+# FUNÇÕES UTILS
+# =============================
 
 def hash_senha(s):
     return hashlib.sha256(s.encode()).hexdigest()
 
 def criar_empresa(nome, email, senha):
-    barbearia_id = len(st.session_state.barbearias) + 1
+    senha_hash = hash_senha(senha)
 
-    st.session_state.barbearias.append({
-        "id": barbearia_id,
+    barbearia = supabase.table("barbearias").insert({
         "nome": nome,
-        "dono": email
-    })
+        "dono_email": email
+    }).execute()
 
-    st.session_state.usuarios.append({
+    barbearia_id = barbearia.data[0]["id"]
+
+    supabase.table("usuarios").insert({
         "email": email,
-        "senha": hash_senha(senha),
+        "senha": senha_hash,
         "role": "admin",
         "barbearia_id": barbearia_id
-    })
+    }).execute()
 
 def login(email, senha):
     senha_hash = hash_senha(senha)
+    response = supabase.table("usuarios") \
+        .select("*") \
+        .eq("email", email) \
+        .eq("senha", senha_hash) \
+        .execute()
 
-    for user in st.session_state.usuarios:
-        if user["email"] == email and user["senha"] == senha_hash:
-            return user
+    if response.data:
+        return response.data[0]
     return None
 
-# ==============================
+def adicionar_servico(nome, preco, barbearia_id):
+    supabase.table("servicos").insert({
+        "nome": nome,
+        "preco": preco,
+        "barbearia_id": barbearia_id
+    }).execute()
+
+def listar_servicos(barbearia_id):
+    response = supabase.table("servicos") \
+        .select("*") \
+        .eq("barbearia_id", barbearia_id) \
+        .execute()
+    return response.data
+
+def adicionar_colaborador(nome, barbearia_id):
+    supabase.table("colaboradores").insert({
+        "nome": nome,
+        "barbearia_id": barbearia_id
+    }).execute()
+
+def listar_colaboradores(barbearia_id):
+    response = supabase.table("colaboradores") \
+        .select("*") \
+        .eq("barbearia_id", barbearia_id) \
+        .execute()
+    return response.data
+
+def salvar_agendamento(cliente, servico, colaborador, data, barbearia_id):
+    supabase.table("agendamentos").insert({
+        "cliente": cliente,
+        "servico": servico,
+        "colaborador": colaborador,
+        "data": data,
+        "barbearia_id": barbearia_id
+    }).execute()
+
+def listar_agendamentos(barbearia_id):
+    response = supabase.table("agendamentos") \
+        .select("*") \
+        .eq("barbearia_id", barbearia_id) \
+        .execute()
+    return response.data
+
+
+# =============================
+# CONTROLE DE SESSÃO
+# =============================
+
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+
+# =============================
 # LOGIN / CADASTRO
-# ==============================
+# =============================
 
 if not st.session_state.logado:
 
@@ -90,85 +133,97 @@ if not st.session_state.logado:
             else:
                 st.error("Login inválido")
 
-# ==============================
+# =============================
 # DASHBOARD
-# ==============================
+# =============================
 
 else:
 
     user = st.session_state.usuario
     barbearia_id = user["barbearia_id"]
 
-    st.sidebar.write(user["email"])
+    st.sidebar.write(f"👤 {user['email']}")
 
     menu = ["Serviços", "Colaboradores", "Agendar", "Agenda"]
     escolha = st.sidebar.radio("Menu", menu)
 
+    # =============================
+    # SERVIÇOS
+    # =============================
+
     if escolha == "Serviços":
+        st.title("Gerenciar Serviços")
+
         nome = st.text_input("Nome do Serviço")
         preco = st.number_input("Preço", min_value=0.0)
 
         if st.button("Adicionar"):
-            st.session_state.servicos.append({
-                "nome": nome,
-                "preco": preco,
-                "barbearia_id": barbearia_id
-            })
-            st.success("Adicionado")
+            adicionar_servico(nome, preco, barbearia_id)
+            st.success("Serviço adicionado!")
 
-        for s in st.session_state.servicos:
-            if s["barbearia_id"] == barbearia_id:
-                st.write(f"{s['nome']} - R$ {s['preco']:.2f}")
+        servicos = listar_servicos(barbearia_id)
+        for s in servicos:
+            st.write(f"{s['nome']} — R$ {float(s['preco']):.2f}")
+
+    # =============================
+    # COLABORADORES
+    # =============================
 
     elif escolha == "Colaboradores":
-        nome = st.text_input("Nome")
+        st.title("Gerenciar Colaboradores")
+
+        nome = st.text_input("Nome do Colaborador")
 
         if st.button("Adicionar"):
-            st.session_state.colaboradores.append({
-                "nome": nome,
-                "barbearia_id": barbearia_id
-            })
-            st.success("Adicionado")
+            adicionar_colaborador(nome, barbearia_id)
+            st.success("Colaborador adicionado!")
 
-        for c in st.session_state.colaboradores:
-            if c["barbearia_id"] == barbearia_id:
-                st.write(c["nome"])
+        colaboradores = listar_colaboradores(barbearia_id)
+        for c in colaboradores:
+            st.write(c["nome"])
+
+    # =============================
+    # AGENDAR
+    # =============================
 
     elif escolha == "Agendar":
+        st.title("Novo Agendamento")
 
-        servicos = [s for s in st.session_state.servicos if s["barbearia_id"] == barbearia_id]
-        colaboradores = [c for c in st.session_state.colaboradores if c["barbearia_id"] == barbearia_id]
+        servicos = listar_servicos(barbearia_id)
+        colaboradores = listar_colaboradores(barbearia_id)
 
         if servicos and colaboradores:
             servico = st.selectbox("Serviço", [s["nome"] for s in servicos])
             preco = next(s["preco"] for s in servicos if s["nome"] == servico)
+            st.write(f"💰 Valor: R$ {float(preco):.2f}")
 
-            st.write(f"Valor: R$ {preco:.2f}")
-
-            colab = st.selectbox("Barbeiro", [c["nome"] for c in colaboradores])
+            colaborador = st.selectbox("Barbeiro", [c["nome"] for c in colaboradores])
             data = st.date_input("Data")
             hora = st.time_input("Hora")
 
-            if st.button("Confirmar"):
-                st.session_state.agendamentos.append({
-                    "cliente": user["email"],
-                    "servico": servico,
-                    "colaborador": colab,
-                    "data": f"{data} {hora}",
-                    "barbearia_id": barbearia_id
-                })
-                st.success("Agendado!")
+            if st.button("Confirmar Agendamento"):
+                salvar_agendamento(
+                    user["email"],
+                    servico,
+                    colaborador,
+                    f"{data} {hora}",
+                    barbearia_id
+                )
+                st.success("Agendado com sucesso!")
+
+    # =============================
+    # AGENDA
+    # =============================
 
     elif escolha == "Agenda":
+        st.title("Agenda da Barbearia")
 
-        dados = [
-            a for a in st.session_state.agendamentos
-            if a["barbearia_id"] == barbearia_id
-        ]
-
+        dados = listar_agendamentos(barbearia_id)
         if dados:
             df = pd.DataFrame(dados)
             st.dataframe(df)
+        else:
+            st.info("Nenhum agendamento encontrado.")
 
     if st.sidebar.button("Sair"):
         st.session_state.logado = False
