@@ -49,12 +49,9 @@ h1, h2, h3 {
 conn = sqlite3.connect("barberpro.db", check_same_thread=False)
 c = conn.cursor()
 
-# Recriar tabelas para evitar erro estrutural
-c.execute("DROP TABLE IF EXISTS usuarios")
-c.execute("DROP TABLE IF EXISTS agendamentos")
-
+# Criar tabela usuarios se não existir
 c.execute("""
-CREATE TABLE usuarios (
+CREATE TABLE IF NOT EXISTS usuarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
     senha TEXT NOT NULL,
@@ -62,8 +59,9 @@ CREATE TABLE usuarios (
 )
 """)
 
+# Criar tabela agendamentos se não existir
 c.execute("""
-CREATE TABLE agendamentos (
+CREATE TABLE IF NOT EXISTS agendamentos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     usuario TEXT NOT NULL,
     servico TEXT NOT NULL,
