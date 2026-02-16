@@ -2,7 +2,6 @@ import streamlit as st
 import sqlite3
 import hashlib
 import pandas as pd
-from datetime import datetime
 
 st.set_page_config(page_title="BarberPro", page_icon="💈", layout="wide")
 
@@ -13,20 +12,48 @@ st.set_page_config(page_title="BarberPro", page_icon="💈", layout="wide")
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #0E1117, #111827);
+    background: linear-gradient(135deg, #0B0F19, #111827);
     color: white;
+    font-family: 'Segoe UI', sans-serif;
 }
+
+section[data-testid="stSidebar"] {
+    background: #0E1117;
+}
+
+h1, h2, h3 {
+    color: #D4AF37;
+}
+
 .card {
-    background: #1F2937;
+    background: linear-gradient(145deg, #1F2937, #111827);
+    padding: 20px;
+    border-radius: 18px;
+    margin-bottom: 15px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    border: 1px solid rgba(212,175,55,0.2);
+}
+
+.metric-card {
+    background: linear-gradient(145deg, #1F2937, #111827);
     padding: 20px;
     border-radius: 15px;
-    margin-bottom: 15px;
-    border-left: 5px solid #D4AF37;
+    text-align: center;
+    border: 1px solid rgba(212,175,55,0.2);
 }
-.metric {
-    font-size: 22px;
+
+.metric-number {
+    font-size: 28px;
     font-weight: bold;
     color: #D4AF37;
+}
+
+.stButton>button {
+    background: linear-gradient(90deg, #D4AF37, #C9A227);
+    color: black;
+    font-weight: bold;
+    border-radius: 12px;
+    border: none;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -58,21 +85,7 @@ CREATE TABLE IF NOT EXISTS agendamentos (
 """)
 
 conn.commit()
-# =============================
-# GARANTIR COLUNAS NOVAS
-# =============================
 
-try:
-    c.execute("ALTER TABLE usuarios ADD COLUMN role TEXT DEFAULT 'user'")
-except:
-    pass
-
-try:
-    c.execute("ALTER TABLE usuarios ADD COLUMN premium INTEGER DEFAULT 0")
-except:
-    pass
-
-conn.commit()
 # =============================
 # FUNÇÕES
 # =============================
@@ -80,11 +93,11 @@ conn.commit()
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-def cadastrar(email, senha, role="user"):
+def cadastrar(email, senha):
     try:
         c.execute(
-            "INSERT INTO usuarios (email, senha, role) VALUES (?, ?, ?)",
-            (email, hash_senha(senha), role)
+            "INSERT INTO usuarios (email, senha) VALUES (?, ?)",
+            (email, hash_senha(senha))
         )
         conn.commit()
         return True
@@ -106,7 +119,7 @@ def salvar_agendamento(usuario, servico, data):
     conn.commit()
 
 def listar_usuario(usuario):
-    c.execute("SELECT servico, data FROM agendamentos WHERE usuario=?", (usuario,))
+    c.execute("SELECT id, servico, data FROM agendamentos WHERE usuario=?", (usuario,))
     return c.fetchall()
 
 def listar_todos():
@@ -116,15 +129,6 @@ def listar_todos():
 def excluir_agendamento(id):
     c.execute("DELETE FROM agendamentos WHERE id=?", (id,))
     conn.commit()
-
-def virar_premium(email):
-    c.execute("UPDATE usuarios SET premium=1 WHERE email=?", (email,))
-    conn.commit()
-
-def verificar_premium(email):
-    c.execute("SELECT premium FROM usuarios WHERE email=?", (email,))
-    resultado = c.fetchone()
-    return resultado[0] if resultado else 0
 
 # =============================
 # SESSÃO
@@ -141,7 +145,7 @@ if "logado" not in st.session_state:
 
 if not st.session_state.logado:
 
-    st.title("💈 BarberPro PRO")
+    st.title("💈 BarberPro Startup")
 
     email = st.text_input("Email")
     senha = st.text_input("Senha", type="password")
@@ -176,7 +180,7 @@ else:
     st.sidebar.write(f"👤 {st.session_state.usuario}")
     st.sidebar.write(f"🔐 {st.session_state.role}")
 
-    menu = ["📅 Agendar", "📋 Meus Agendamentos", "👑 Premium"]
+    menu = ["📅 Agendar", "📋 Meus Agendamentos"]
 
     if st.session_state.role == "admin":
         menu.append("📊 Painel Admin")
@@ -192,64 +196,81 @@ else:
         hora = st.time_input("Hora")
 
         if st.button("Confirmar"):
-            data_final = f"{data} {hora}"
-            salvar_agendamento(st.session_state.usuario, servico, data_final)
+            salvar_agendamento(
+                st.session_state.usuario,
+                servico,
+                f"{data} {hora}"
+            )
             st.success("Agendado com sucesso!")
 
     # MEUS AGENDAMENTOS
     elif escolha == "📋 Meus Agendamentos":
-        st.title("Meus Horários")
+        st.title("📋 Meus Agendamentos")
 
         dados = listar_usuario(st.session_state.usuario)
 
         if dados:
             for ag in dados:
-                st.markdown(f"""
+                col1, col2 = st.columns([4,1])
+
+                col1.markdown(f"""
                 <div class="card">
-                <b>Serviço:</b> {ag[0]}<br>
-                <b>Data:</b> {ag[1]}
+                    <h3>💈 {ag[1]}</h3>
+                    <p>📅 {ag[2]}</p>
                 </div>
                 """, unsafe_allow_html=True)
+
+                if col2.button("❌", key=f"user_{ag[0]}"):
+                    excluir_agendamento(ag[0])
+                    st.rerun()
         else:
-            st.info("Nenhum agendamento.")
-
-    # PREMIUM
-    elif escolha == "👑 Premium":
-        st.title("Área Premium")
-
-        if verificar_premium(st.session_state.usuario):
-            st.success("Você é Premium 👑")
-        else:
-            st.warning("Você ainda não é Premium.")
-
-            if st.button("Ativar Premium"):
-                virar_premium(st.session_state.usuario)
-                st.success("Premium ativado!")
+            st.markdown("""
+            <div class="card">
+                <h3>Nenhum agendamento encontrado</h3>
+            </div>
+            """, unsafe_allow_html=True)
 
     # ADMIN
     elif escolha == "📊 Painel Admin":
-        st.title("Dashboard Administrativo")
+        st.title("📊 Dashboard Administrativo")
 
         dados = listar_todos()
-
         df = pd.DataFrame(dados, columns=["ID", "Usuário", "Serviço", "Data"])
 
         col1, col2, col3 = st.columns(3)
 
-        col1.metric("Total Agendamentos", len(df))
-        col2.metric("Usuários Únicos", df["Usuário"].nunique())
-        col3.metric("Serviços Oferecidos", df["Serviço"].nunique())
+        col1.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-number">{len(df)}</div>
+            Total Agendamentos
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.bar_chart(df["Serviço"].value_counts())
+        col2.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-number">{df['Usuário'].nunique() if not df.empty else 0}</div>
+            Usuários
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.subheader("Lista Geral")
+        col3.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-number">{df['Serviço'].nunique() if not df.empty else 0}</div>
+            Serviços
+        </div>
+        """, unsafe_allow_html=True)
 
-        for _, row in df.iterrows():
-            colA, colB = st.columns([4,1])
-            colA.write(f"{row['Usuário']} | {row['Serviço']} | {row['Data']}")
-            if colB.button("Excluir", key=row["ID"]):
-                excluir_agendamento(row["ID"])
-                st.rerun()
+        if not df.empty:
+            st.bar_chart(df["Serviço"].value_counts())
+
+            st.subheader("Lista Geral")
+
+            for _, row in df.iterrows():
+                colA, colB = st.columns([4,1])
+                colA.write(f"{row['Usuário']} | {row['Serviço']} | {row['Data']}")
+                if colB.button("Excluir", key=f"admin_{row['ID']}"):
+                    excluir_agendamento(row["ID"])
+                    st.rerun()
 
     if st.sidebar.button("Sair"):
         st.session_state.logado = False
