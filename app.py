@@ -2,81 +2,69 @@ import streamlit as st
 import sqlite3
 import hashlib
 import pandas as pd
-import os
 
 st.set_page_config(page_title="BarberSaaS", page_icon="💈", layout="wide")
 
-# =====================================
-# RECRIAR BANCO AUTOMATICAMENTE
-# =====================================
-
 DB_NAME = "barbersaas.db"
-
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS barbearias (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT,
-        dono_email TEXT
-    )
-    """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS usuarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE,
-        senha TEXT,
-        role TEXT,
-        barbearia_id INTEGER
-    )
-    """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS servicos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT,
-        preco REAL,
-        barbearia_id INTEGER
-    )
-    """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS colaboradores (
-        id INTEGER PRIMARY KEY AUTOINEMENT,
-        nome TEXT,
-        barbearia_id INTEGER
-    )
-    """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS agendamentos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cliente TEXT,
-        servico TEXT,
-        colaborador TEXT,
-        data TEXT,
-        barbearia_id INTEGER
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# =====================================
-# CONEXÃO
-# =====================================
 
 conn = sqlite3.connect(DB_NAME, check_same_thread=False)
 c = conn.cursor()
 
-# =====================================
+# =============================
+# CRIAÇÃO DAS TABELAS
+# =============================
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS barbearias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    dono_email TEXT
+)
+""")
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE,
+    senha TEXT,
+    role TEXT,
+    barbearia_id INTEGER
+)
+""")
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS servicos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    preco REAL,
+    barbearia_id INTEGER
+)
+""")
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS colaboradores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    barbearia_id INTEGER
+)
+""")
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS agendamentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente TEXT,
+    servico TEXT,
+    colaborador TEXT,
+    data TEXT,
+    barbearia_id INTEGER
+)
+""")
+
+conn.commit()
+
+# =============================
 # FUNÇÕES
-# =====================================
+# =============================
 
 def hash_senha(s):
     return hashlib.sha256(s.encode()).hexdigest()
@@ -142,31 +130,31 @@ def listar_agendamentos(barbearia_id):
     """, (barbearia_id,))
     return c.fetchall()
 
-# =====================================
+# =============================
 # SESSÃO
-# =====================================
+# =============================
 
 if "logado" not in st.session_state:
     st.session_state.logado = False
 
-# =====================================
+# =============================
 # LOGIN / CADASTRO
-# =====================================
+# =============================
 
 if not st.session_state.logado:
 
     st.title("💈 BarberSaaS")
 
-    escolha = st.radio("Escolha", ["Entrar", "Criar Barbearia"])
+    opcao = st.radio("Escolha", ["Entrar", "Criar Barbearia"])
 
-    if escolha == "Criar Barbearia":
+    if opcao == "Criar Barbearia":
         nome = st.text_input("Nome da Barbearia")
         email = st.text_input("Email")
         senha = st.text_input("Senha", type="password")
 
-        if st.button("Criar"):
+        if st.button("Criar Empresa"):
             criar_empresa(nome, email, senha)
-            st.success("Empresa criada! Agora faça login.")
+            st.success("Empresa criada! Faça login.")
 
     else:
         email = st.text_input("Email")
@@ -183,16 +171,15 @@ if not st.session_state.logado:
             else:
                 st.error("Login inválido")
 
-# =====================================
+# =============================
 # DASHBOARD
-# =====================================
+# =============================
 
 else:
 
     st.sidebar.write(st.session_state.email)
 
     menu = ["Agendar", "Serviços", "Colaboradores", "Agenda"]
-
     escolha = st.sidebar.radio("Menu", menu)
 
     if escolha == "Serviços":
@@ -220,7 +207,7 @@ else:
         servicos = listar_servicos(st.session_state.barbearia_id)
         colaboradores = listar_colaboradores(st.session_state.barbearia_id)
 
-        if servicos:
+        if servicos and colaboradores:
             nomes = [s[0] for s in servicos]
             servico = st.selectbox("Serviço", nomes)
             preco = [s[1] for s in servicos if s[0] == servico][0]
