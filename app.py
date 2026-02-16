@@ -6,53 +6,30 @@ import pandas as pd
 st.set_page_config(page_title="BarberPro", page_icon="💈", layout="wide")
 
 # =============================
-# ESTILO PREMIUM STARTUP
+# ESTILO CLEAN PREMIUM
 # =============================
 
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #0B0F19, #111827);
+    background: #0F172A;
     color: white;
-    font-family: 'Segoe UI', sans-serif;
+    font-family: Arial, sans-serif;
 }
 
 section[data-testid="stSidebar"] {
-    background: #0E1117;
+    background: #111827;
 }
 
 h1, h2, h3 {
     color: #D4AF37;
 }
 
-.card {
-    background: linear-gradient(145deg, #1F2937, #111827);
-    padding: 20px;
-    border-radius: 18px;
-    margin-bottom: 15px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-    border: 1px solid rgba(212,175,55,0.2);
-}
-
-.metric-card {
-    background: linear-gradient(145deg, #1F2937, #111827);
-    padding: 20px;
-    border-radius: 15px;
-    text-align: center;
-    border: 1px solid rgba(212,175,55,0.2);
-}
-
-.metric-number {
-    font-size: 28px;
-    font-weight: bold;
-    color: #D4AF37;
-}
-
 .stButton>button {
-    background: linear-gradient(90deg, #D4AF37, #C9A227);
+    background: #D4AF37;
     color: black;
     font-weight: bold;
-    border-radius: 12px;
+    border-radius: 8px;
     border: none;
 }
 </style>
@@ -130,6 +107,10 @@ def excluir_agendamento(id):
     c.execute("DELETE FROM agendamentos WHERE id=?", (id,))
     conn.commit()
 
+def virar_admin(email):
+    c.execute("UPDATE usuarios SET role='admin' WHERE email=?", (email,))
+    conn.commit()
+
 # =============================
 # SESSÃO
 # =============================
@@ -145,7 +126,7 @@ if "logado" not in st.session_state:
 
 if not st.session_state.logado:
 
-    st.title("💈 BarberPro Startup")
+    st.title("💈 BarberPro")
 
     email = st.text_input("Email")
     senha = st.text_input("Senha", type="password")
@@ -180,6 +161,14 @@ else:
     st.sidebar.write(f"👤 {st.session_state.usuario}")
     st.sidebar.write(f"🔐 {st.session_state.role}")
 
+    # SUPER ADMIN SECRETO
+    codigo_master = st.sidebar.text_input("Código Master", type="password")
+
+    if codigo_master == "123superadmin":
+        virar_admin(st.session_state.usuario)
+        st.session_state.role = "admin"
+        st.sidebar.success("Modo Super Admin ativado 👑")
+
     menu = ["📅 Agendar", "📋 Meus Agendamentos"]
 
     if st.session_state.role == "admin":
@@ -187,7 +176,10 @@ else:
 
     escolha = st.sidebar.radio("Menu", menu)
 
+    # =============================
     # AGENDAR
+    # =============================
+
     if escolha == "📅 Agendar":
         st.title("Novo Agendamento")
 
@@ -203,72 +195,50 @@ else:
             )
             st.success("Agendado com sucesso!")
 
-    # MEUS AGENDAMENTOS
+    # =============================
+    # MEUS AGENDAMENTOS (SIMPLIFICADO)
+    # =============================
+
     elif escolha == "📋 Meus Agendamentos":
-        st.title("📋 Meus Agendamentos")
+        st.title("Meus Agendamentos")
 
         dados = listar_usuario(st.session_state.usuario)
 
-        if dados:
+        if not dados:
+            st.info("Você ainda não tem agendamentos.")
+        else:
             for ag in dados:
-                col1, col2 = st.columns([4,1])
-
-                col1.markdown(f"""
-                <div class="card">
-                    <h3>💈 {ag[1]}</h3>
-                    <p>📅 {ag[2]}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                if col2.button("❌", key=f"user_{ag[0]}"):
+                col1, col2 = st.columns([5,1])
+                col1.write(f"💈 {ag[1]} — 📅 {ag[2]}")
+                if col2.button("❌", key=f"user_del_{ag[0]}"):
                     excluir_agendamento(ag[0])
                     st.rerun()
-        else:
-            st.markdown("""
-            <div class="card">
-                <h3>Nenhum agendamento encontrado</h3>
-            </div>
-            """, unsafe_allow_html=True)
 
-    # ADMIN
+    # =============================
+    # PAINEL ADMIN (SIMPLIFICADO)
+    # =============================
+
     elif escolha == "📊 Painel Admin":
-        st.title("📊 Dashboard Administrativo")
+        st.title("Dashboard Administrativo")
 
         dados = listar_todos()
         df = pd.DataFrame(dados, columns=["ID", "Usuário", "Serviço", "Data"])
 
         col1, col2, col3 = st.columns(3)
 
-        col1.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-number">{len(df)}</div>
-            Total Agendamentos
-        </div>
-        """, unsafe_allow_html=True)
-
-        col2.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-number">{df['Usuário'].nunique() if not df.empty else 0}</div>
-            Usuários
-        </div>
-        """, unsafe_allow_html=True)
-
-        col3.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-number">{df['Serviço'].nunique() if not df.empty else 0}</div>
-            Serviços
-        </div>
-        """, unsafe_allow_html=True)
+        col1.metric("Total", len(df))
+        col2.metric("Usuários", df["Usuário"].nunique() if not df.empty else 0)
+        col3.metric("Serviços", df["Serviço"].nunique() if not df.empty else 0)
 
         if not df.empty:
             st.bar_chart(df["Serviço"].value_counts())
 
-            st.subheader("Lista Geral")
+            st.subheader("Todos os Agendamentos")
 
             for _, row in df.iterrows():
-                colA, colB = st.columns([4,1])
-                colA.write(f"{row['Usuário']} | {row['Serviço']} | {row['Data']}")
-                if colB.button("Excluir", key=f"admin_{row['ID']}"):
+                colA, colB = st.columns([5,1])
+                colA.write(f"{row['Usuário']} — {row['Serviço']} — {row['Data']}")
+                if colB.button("❌", key=f"admin_del_{row['ID']}"):
                     excluir_agendamento(row["ID"])
                     st.rerun()
 
