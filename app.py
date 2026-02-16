@@ -58,7 +58,21 @@ CREATE TABLE IF NOT EXISTS agendamentos (
 """)
 
 conn.commit()
+# =============================
+# GARANTIR COLUNAS NOVAS
+# =============================
 
+try:
+    c.execute("ALTER TABLE usuarios ADD COLUMN role TEXT DEFAULT 'user'")
+except:
+    pass
+
+try:
+    c.execute("ALTER TABLE usuarios ADD COLUMN premium INTEGER DEFAULT 0")
+except:
+    pass
+
+conn.commit()
 # =============================
 # FUNÇÕES
 # =============================
