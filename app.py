@@ -3,38 +3,46 @@ import sqlite3
 import hashlib
 import pandas as pd
 
-st.set_page_config(page_title="BarberPro", page_icon="💈", layout="wide")
+st.set_page_config(page_title="BarberSaaS", page_icon="💈", layout="wide")
 
-# =============================
-# ESTILO CLEAN
-# =============================
+# =========================
+# CONFIG SUPER ADMIN
+# =========================
+SUPER_ADMIN_EMAIL = "admin@barbersaas.com"
 
+# =========================
+# ESTILO
+# =========================
 st.markdown("""
 <style>
 .stApp { background: #0F172A; color: white; }
 section[data-testid="stSidebar"] { background: #111827; }
 h1, h2, h3 { color: #D4AF37; }
-.stButton>button {
-    background: #D4AF37;
-    color: black;
-    font-weight: bold;
-}
+.stButton>button { background: #D4AF37; color: black; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# =============================
+# =========================
 # BANCO
-# =============================
-
-conn = sqlite3.connect("barberpro.db", check_same_thread=False)
+# =========================
+conn = sqlite3.connect("barbersaas.db", check_same_thread=False)
 c = conn.cursor()
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS barbearias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    dono_email TEXT
+)
+""")
 
 c.execute("""
 CREATE TABLE IF NOT EXISTS usuarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE,
     senha TEXT,
-    role TEXT DEFAULT 'user'
+    role TEXT DEFAULT 'user',
+    barbearia_id INTEGER
 )
 """)
 
@@ -42,14 +50,16 @@ c.execute("""
 CREATE TABLE IF NOT EXISTS servicos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT,
-    preco REAL
+    preco REAL,
+    barbearia_id INTEGER
 )
 """)
 
 c.execute("""
 CREATE TABLE IF NOT EXISTS colaboradores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT
+    nome TEXT,
+    barbearia_id INTEGER
 )
 """)
 
@@ -59,239 +69,180 @@ CREATE TABLE IF NOT EXISTS agendamentos (
     usuario TEXT,
     servico TEXT,
     colaborador TEXT,
-    data TEXT
+    data TEXT,
+    barbearia_id INTEGER
 )
 """)
 
 conn.commit()
 
-# =============================
+# =========================
 # FUNÇÕES
-# =============================
+# =========================
 
 def hash_senha(s):
     return hashlib.sha256(s.encode()).hexdigest()
 
-def cadastrar(email, senha):
-    try:
-        c.execute("INSERT INTO usuarios (email, senha) VALUES (?, ?)",
-                  (email, hash_senha(senha)))
-        conn.commit()
-        return True
-    except:
-        return False
+def criar_barbeiro_empresa(nome_barbearia, email, senha):
+    c.execute("INSERT INTO barbearias (nome, dono_email) VALUES (?, ?)",
+              (nome_barbearia, email))
+    barbearia_id = c.lastrowid
+
+    c.execute("""
+        INSERT INTO usuarios (email, senha, role, barbearia_id)
+        VALUES (?, ?, 'admin', ?)
+    """, (email, hash_senha(senha), barbearia_id))
+    conn.commit()
 
 def login(email, senha):
-    c.execute("SELECT email, role FROM usuarios WHERE email=? AND senha=?",
-              (email, hash_senha(senha)))
+    c.execute("""
+        SELECT email, role, barbearia_id
+        FROM usuarios
+        WHERE email=? AND senha=?
+    """, (email, hash_senha(senha)))
     return c.fetchone()
 
-def virar_admin(email):
-    c.execute("UPDATE usuarios SET role='admin' WHERE email=?", (email,))
-    conn.commit()
-
-def adicionar_servico(nome, preco):
-    c.execute("INSERT INTO servicos (nome, preco) VALUES (?, ?)", (nome, preco))
-    conn.commit()
-
-def adicionar_colaborador(nome):
-    c.execute("INSERT INTO colaboradores (nome) VALUES (?)", (nome,))
-    conn.commit()
-
-def listar_servicos():
-    c.execute("SELECT nome, preco FROM servicos")
-    return c.fetchall()
-
-def listar_colaboradores():
-    c.execute("SELECT nome FROM colaboradores")
-    return [c[0] for c in c.fetchall()]
-
-def salvar_agendamento(usuario, servico, colaborador, data):
+def adicionar_servico(nome, preco, barbearia_id):
     c.execute("""
-        INSERT INTO agendamentos (usuario, servico, colaborador, data)
-        VALUES (?, ?, ?, ?)
-    """, (usuario, servico, colaborador, data))
+        INSERT INTO servicos (nome, preco, barbearia_id)
+        VALUES (?, ?, ?)
+    """, (nome, preco, barbearia_id))
     conn.commit()
 
-def listar_usuario(usuario):
-    c.execute("SELECT id, servico, colaborador, data FROM agendamentos WHERE usuario=?", (usuario,))
+def listar_servicos(barbearia_id):
+    c.execute("SELECT nome, preco FROM servicos WHERE barbearia_id=?",
+              (barbearia_id,))
     return c.fetchall()
 
-def listar_todos():
-    c.execute("SELECT id, usuario, servico, colaborador, data FROM agendamentos")
-    return c.fetchall()
-
-def excluir_agendamento(id):
-    c.execute("DELETE FROM agendamentos WHERE id=?", (id,))
+def adicionar_colaborador(nome, barbearia_id):
+    c.execute("""
+        INSERT INTO colaboradores (nome, barbearia_id)
+        VALUES (?, ?)
+    """, (nome, barbearia_id))
     conn.commit()
 
-# =============================
+def listar_colaboradores(barbearia_id):
+    c.execute("SELECT nome FROM colaboradores WHERE barbearia_id=?",
+              (barbearia_id,))
+    return [x[0] for x in c.fetchall()]
+
+def salvar_agendamento(usuario, servico, colaborador, data, barbearia_id):
+    c.execute("""
+        INSERT INTO agendamentos (usuario, servico, colaborador, data, barbearia_id)
+        VALUES (?, ?, ?, ?, ?)
+    """, (usuario, servico, colaborador, data, barbearia_id))
+    conn.commit()
+
+def listar_agendamentos(barbearia_id):
+    c.execute("""
+        SELECT usuario, servico, colaborador, data
+        FROM agendamentos
+        WHERE barbearia_id=?
+    """, (barbearia_id,))
+    return c.fetchall()
+
+# =========================
 # SESSÃO
-# =============================
-
+# =========================
 if "logado" not in st.session_state:
     st.session_state.logado = False
-    st.session_state.usuario = ""
-    st.session_state.role = ""
 
-# =============================
-# LOGIN
-# =============================
+# =========================
+# LOGIN / CADASTRO EMPRESA
+# =========================
 
 if not st.session_state.logado:
 
-    st.title("💈 BarberPro")
+    st.title("💈 BarberSaaS")
 
-    email = st.text_input("Email")
-    senha = st.text_input("Senha", type="password")
+    escolha = st.radio("Escolha", ["Entrar", "Criar Barbearia"])
 
-    col1, col2 = st.columns(2)
+    if escolha == "Criar Barbearia":
+        nome_barbearia = st.text_input("Nome da Barbearia")
+        email = st.text_input("Email do Dono")
+        senha = st.text_input("Senha", type="password")
 
-    if col1.button("Cadastrar"):
-        if cadastrar(email, senha):
-            st.success("Usuário criado!")
-        else:
-            st.error("Email já existe.")
+        if st.button("Criar Empresa"):
+            criar_barbeiro_empresa(nome_barbearia, email, senha)
+            st.success("Empresa criada! Faça login.")
 
-    if col2.button("Entrar"):
-        user = login(email, senha)
-        if user:
-            st.session_state.logado = True
-            st.session_state.usuario = user[0]
-            st.session_state.role = user[1]
-            st.rerun()
-        else:
-            st.error("Credenciais inválidas.")
+    else:
+        email = st.text_input("Email")
+        senha = st.text_input("Senha", type="password")
 
-# =============================
-# ÁREA LOGADA
-# =============================
+        if st.button("Entrar"):
+            user = login(email, senha)
+            if user:
+                st.session_state.logado = True
+                st.session_state.email = user[0]
+                st.session_state.role = user[1]
+                st.session_state.barbearia_id = user[2]
+                st.rerun()
+            else:
+                st.error("Login inválido")
+
+# =========================
+# DASHBOARD
+# =========================
 
 else:
 
-    st.sidebar.title("💈 BarberPro")
-    st.sidebar.write(st.session_state.usuario)
-    st.sidebar.write(st.session_state.role)
+    st.sidebar.write(st.session_state.email)
 
-    # SUPER ADMIN
-    codigo_master = st.sidebar.text_input("Código Master", type="password")
-    if codigo_master == "123superadmin":
-        virar_admin(st.session_state.usuario)
-        st.session_state.role = "admin"
-        st.sidebar.success("Modo Admin ativado 👑")
-
-    menu = ["📅 Agendar", "📋 Meus Agendamentos"]
-
-    if st.session_state.role == "admin":
-        menu += ["⚙ Serviços", "✂ Colaboradores", "📊 Painel Admin"]
+    menu = ["Agendar", "Serviços", "Colaboradores", "Agenda"]
 
     escolha = st.sidebar.radio("Menu", menu)
 
-    # =============================
-    # AGENDAR
-    # =============================
+    if escolha == "Serviços":
+        nome = st.text_input("Nome do Serviço")
+        preco = st.number_input("Preço", min_value=0.0)
 
-    if escolha == "📅 Agendar":
-        st.title("Novo Agendamento")
+        if st.button("Adicionar"):
+            adicionar_servico(nome, preco, st.session_state.barbearia_id)
+            st.success("Adicionado")
 
-        servicos = listar_servicos()
-        colaboradores = listar_colaboradores()
+        st.subheader("Serviços")
+        for s in listar_servicos(st.session_state.barbearia_id):
+            st.write(f"{s[0]} - R$ {s[1]:.2f}")
 
-        if not servicos:
-            st.warning("Nenhum serviço cadastrado.")
-        else:
-            nomes_servicos = [s[0] for s in servicos]
-            servico = st.selectbox("Serviço", nomes_servicos)
+    elif escolha == "Colaboradores":
+        nome = st.text_input("Nome")
 
-            preco = [s[1] for s in servicos if s[0] == servico][0]
-            st.write(f"💰 Valor: R$ {preco:.2f}")
+        if st.button("Adicionar"):
+            adicionar_colaborador(nome, st.session_state.barbearia_id)
+            st.success("Adicionado")
 
-            colaborador = st.selectbox("Barbeiro", colaboradores)
+        for c in listar_colaboradores(st.session_state.barbearia_id):
+            st.write(c)
 
+    elif escolha == "Agendar":
+        servicos = listar_servicos(st.session_state.barbearia_id)
+        colaboradores = listar_colaboradores(st.session_state.barbearia_id)
+
+        if servicos:
+            nomes = [s[0] for s in servicos]
+            servico = st.selectbox("Serviço", nomes)
+            preco = [s[1] for s in servicos if s[0]==servico][0]
+            st.write(f"Valor: R$ {preco:.2f}")
+
+            colab = st.selectbox("Barbeiro", colaboradores)
             data = st.date_input("Data")
             hora = st.time_input("Hora")
 
             if st.button("Confirmar"):
                 salvar_agendamento(
-                    st.session_state.usuario,
+                    st.session_state.email,
                     servico,
-                    colaborador,
-                    f"{data} {hora}"
+                    colab,
+                    f"{data} {hora}",
+                    st.session_state.barbearia_id
                 )
-                st.success("Agendado com sucesso!")
+                st.success("Agendado")
 
-    # =============================
-    # MEUS AGENDAMENTOS
-    # =============================
-
-    elif escolha == "📋 Meus Agendamentos":
-        st.title("Meus Agendamentos")
-
-        dados = listar_usuario(st.session_state.usuario)
-
-        for ag in dados:
-            col1, col2 = st.columns([5,1])
-            col1.write(f"{ag[1]} | {ag[2]} | {ag[3]}")
-            if col2.button("❌", key=ag[0]):
-                excluir_agendamento(ag[0])
-                st.rerun()
-
-    # =============================
-    # SERVIÇOS (ADMIN)
-    # =============================
-
-    elif escolha == "⚙ Serviços":
-        st.title("Gerenciar Serviços")
-
-        nome = st.text_input("Nome do Serviço")
-        preco = st.number_input("Preço", min_value=0.0)
-
-        if st.button("Adicionar Serviço"):
-            adicionar_servico(nome, preco)
-            st.success("Serviço adicionado!")
-
-        st.subheader("Serviços Atuais")
-        for s in listar_servicos():
-            st.write(f"{s[0]} - R$ {s[1]:.2f}")
-
-    # =============================
-    # COLABORADORES (ADMIN)
-    # =============================
-
-    elif escolha == "✂ Colaboradores":
-        st.title("Gerenciar Colaboradores")
-
-        nome = st.text_input("Nome do Colaborador")
-
-        if st.button("Adicionar Colaborador"):
-            adicionar_colaborador(nome)
-            st.success("Colaborador adicionado!")
-
-        st.subheader("Equipe Atual")
-        for c in listar_colaboradores():
-            st.write(c)
-
-    # =============================
-    # PAINEL ADMIN
-    # =============================
-
-    elif escolha == "📊 Painel Admin":
-        st.title("Dashboard")
-
-        dados = listar_todos()
-        df = pd.DataFrame(dados, columns=["ID","Usuário","Serviço","Barbeiro","Data"])
-
-        st.metric("Total Agendamentos", len(df))
-
-        if not df.empty:
-            st.bar_chart(df["Serviço"].value_counts())
-
-            for _, row in df.iterrows():
-                colA, colB = st.columns([5,1])
-                colA.write(f"{row['Usuário']} | {row['Serviço']} | {row['Barbeiro']} | {row['Data']}")
-                if colB.button("❌", key=row["ID"]):
-                    excluir_agendamento(row["ID"])
-                    st.rerun()
+    elif escolha == "Agenda":
+        dados = listar_agendamentos(st.session_state.barbearia_id)
+        df = pd.DataFrame(dados, columns=["Cliente","Serviço","Barbeiro","Data"])
+        st.dataframe(df)
 
     if st.sidebar.button("Sair"):
         st.session_state.logado = False
